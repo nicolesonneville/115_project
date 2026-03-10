@@ -16,9 +16,9 @@ clean_data <- raw_data %>%
   ungroup() %>%
   separate(QBrec, into = c("Wins"), sep = "-", extra = "drop", convert = TRUE) %>% # extract number of wins
   select(
-    c("year", "Player", "Age", "GS", "Wins", "Cmp", "Att", "Yds...11", "TD", "Int", "Succ%", "Rate", "QBR", "Sk")
+    c("year", "Player", "Age", "GS", "Wins", "Cmp", "Att", "Cmp%","Yds...11", "TD", "Int", "Succ%", "Rate", "QBR", "Sk")
   ) %>% 
-  rename(Yards = Yds...11, Completions = Cmp, Attempts = Att, Interceptions = Int, Sacks = Sk) # rename column for cleanliness
+  rename(Yards = Yds...11, Completions = Cmp, Attempts = Att, Comp_Percentage = `Cmp%`,Interceptions = Int, Sacks = Sk) # rename column for cleanliness
 
 # write clean data to a csv file for usage in other files
 write_csv(clean_data, "./data/cleaned_data.csv")
