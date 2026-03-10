@@ -1,4 +1,6 @@
-data <- read_csv('../data/2025.csv')
+library(tidyverse)
+
+data <- read_csv('./data/2025.csv')
 
 head(data)
 
@@ -9,4 +11,5 @@ clean_data <- data %>%
   select(
     c("Rk", "Player", "Age", "GS", "Wins", "Cmp", "Att", "Yds...12", "TD", "Int", "Succ%", "Rate", "QBR", "Sk")
   ) %>% 
-  rename(Yards = Yds...12) # rename column for cleanliness
+  rename(Yards = Yds...12, Completions = Cmp, Attempts = Att, Interceptions = Int, Sacks = Sk) # rename column for cleanliness
+
