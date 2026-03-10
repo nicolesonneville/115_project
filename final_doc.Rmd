@@ -1,0 +1,12 @@
+---
+title: "final_doc"
+output: pdf_document
+date: "2026-03-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Stats 115 Final Project
+Arnav Kanekar, Allyson Lopez, Yvette Vargas, and Nicole Sonneville
