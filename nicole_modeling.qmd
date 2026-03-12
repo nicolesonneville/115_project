@@ -205,3 +205,106 @@ if (any(pareto_k_values(loo_2025) > 0.7)) {
   loo_2025 <- loo(model_2025, k_threshold = 0.7, cores = 2)
 }
 ```
+
+### Checking if random intercepts are needed
+
+```{r}
+# Full Model (What you have now)
+fit_both <- stan_glmer(cbind(Completions, Missed) ~ 1 + (1 | Player) + (1 | year), 
+                       data = historical, family = binomial, refresh = FALSE)
+
+# Model without Year
+fit_player_only <- stan_glmer(cbind(Completions, Missed) ~ 1 + (1 | Player), 
+                              data = historical, family = binomial, refresh = FALSE)
+
+# Model without Player (just to be thorough)
+fit_year_only <- stan_glmer(cbind(Completions, Missed) ~ 1 + (1 | year), 
+                            data = historical, family = binomial, refresh = FALSE)
+
+```
+
+```{r}
+# 1. Run kfold for both models
+kfold_full <- kfold(fit_both, K = 10)
+kfold_player_only <- kfold(fit_player_only, K = 10)
+
+# 2. Compare
+loo_compare(kfold_full, kfold_player_only)
+```
+
+```{r}
+library(ggplot2)
+library(broom.mixed)
+
+year_intercepts <- tidy(fit_both, effects = "ran_vals") %>% 
+  filter(group == "year")
+
+ggplot(year_intercepts, aes(x = level, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Relative Difficulty by Year (Log-Odds)",
+       x = "Year", y = "Adjustment to Completion Rate") +
+  theme_minimal()
+```
+
+```{r}
+kfold_year_only <- kfold(fit_year_only, K = 10)
+loo_compare(kfold_full, kfold_year_only)
+```
+
+```{r}
+ggplot(player_intercepts, aes(x = reorder(level, estimate), y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Relative Difficulty by Player (Log-Odds)",
+       x = "Player", 
+       y = "Adjustment to Completion Rate") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) # Rotates names 45 degrees
+```
+
+```{r}
+historical$year_idx <- historical$year - min(historical$year)
+
+fit_intercept <- stan_glmer(
+  cbind(Completions, Missed) ~ year_idx + (1 | Player) + (1 | year),
+  data = historical,
+  family = binomial(link = "logit"),
+  cores = 2, seed = 123, refresh = FALSE
+)
+
+fit_slope <- stan_glmer(
+  cbind(Completions, Missed) ~ year_idx + (1 + year_idx | Player) + (1 | year),
+  data = historical,
+  family = binomial(link = "logit"),
+  cores = 2, seed = 123, refresh = FALSE
+)
+
+k_intercept <- kfold(fit_intercept, K = 10)
+k_slope     <- kfold(fit_slope, K = 10)
+
+comparison <- loo_compare(k_intercept, k_slope)
+print(comparison)
+```
+
+```{r}
+library(broom.mixed)
+# Extract the slope estimates for each player
+player_slopes <- tidy(fit_slope, effects = "ran_vals") %>% 
+  filter(term == "year_idx")
+
+ggplot(player_slopes, aes(x = reorder(level, estimate), y = estimate)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  coord_flip() +
+  labs(title = "Who is Improving vs. Declining?",
+       subtitle = "Positive = Improving completion rate over time",
+       x = "Player", y = "Slope (Rate of Change)") +
+  theme_minimal()
+```
+
+```{r}
+print(fit_slope, pars = "sigma")
+```
