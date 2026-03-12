@@ -205,7 +205,3 @@ if (any(pareto_k_values(loo_2025) > 0.7)) {
   loo_2025 <- loo(model_2025, k_threshold = 0.7, cores = 2)
 }
 ```
-
-```{r}
-print(loo_2025)
-```
