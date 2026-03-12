@@ -11,6 +11,8 @@ clean_data <- raw_data %>%
   filter(Pos == 'QB') %>% # filter to keep only quarterbacks
   filter(GS > 3) %>% # filter out players who have played only a few games
   filter(Att > 50) %>% # filter out players who did not attempt many passes
+  # this portion removes players who appear multiple times in the same year, because they were on 2 teams
+  # the row with the most games started will have the entire season long data, so we keep that
   group_by(Player, year) %>% 
   slice_max(order_by = GS, n = 1, with_ties = FALSE) %>% 
   ungroup() %>%
