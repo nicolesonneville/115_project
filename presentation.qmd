@@ -1,0 +1,77 @@
+---
+title: "A Bayesian Approach to Quarterback Accuracy"
+subtitle: "STATS 115 Project"
+author: 
+  - Arnav Kanekar
+  - Nicole Sonneville
+  - Yvette Vargas
+  - Allyson Lopez
+date: "March 20, 2026"
+format: revealjs
+---
+
+```{r}
+library(tidyverse)
+```
+
+## Project Question
+
+How can we estimate and compare the **true completion ability** of NFL quarterbacks by accounting for variability in **sample size** and **game conditions** using Bayesian statistics?
+
+## Background
+
+- Comparison of quarterbacks is a highly debated topic.
+- Completion percentage is often used as a gauge of quarterback accuracy. 
+  - $\text{Completion %} = \frac{\text{Number of Completions}}{\text{Number of Passes Attempted}}$
+- But each quarterback faces unique and different scenarios and challenges throughout the season, so it is difficult to compare players directly.
+
+Can we propose a method that allows NFL teams to get a better sense of the true ability of a quarterback?
+
+## Data Selection
+
+- Season long quarterback data
+  - Official NFL data from 2015-2025 seasons
+  - https://www.pro-football-reference.com
+
+## Data Cleaning
+
+- Cleaned data to only include data from players who have played enough 
+  - kept passing data for only quarterbacks (main throwers of the ball in American football)
+  - removed players who have started 3 games or less than 50 pass attempts
+- Cleaned rows when a player appeared multiple times in one year
+  - Due to team switches
+
+## Dataset
+
+- 452 rows, 15 columns, and 121 unique quarterbacks with varying occurrences over the decade of data
+- Main variables: `Completions`, `Attempts`, `Comp_Percentage`
+  - `Completions`: Number of passes completed in a season
+  - `Attempts`: Number of passes attempted in a season
+  - `Comp_Percentage`: Completion percentage, calculated by $\frac{\text{Number of Completions}}{\text{Number of Passes Attempted}}$
+- Other variables include number of wins, number of touchdowns thrown, number of interceptions thrown, QB rating, number of sacks taken
+  - These columns were not integral to our research question
+
+## Dataset
+
+```{r}
+#| message: false
+data <- read_csv("data/cleaned_data.csv")
+data <- data %>%
+  select(year, Player, Age, GS, Wins, Completions, Attempts, Comp_Percentage)
+
+head(data, 10)
+```
+
+## Exploratory Data Analysis
+
+```{r}
+# Allyson's EDA
+```
+
+## Binomial Hierarchical Modeling
+
+- We have correlation between seasons as most quarterbacks play more than one season.
+- We will estimate random intercepts for each QB's true completion probability
+  - shrink small-sample QBs toward the average
+
+
