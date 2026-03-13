@@ -1,8 +1,3 @@
----
-title: "README"
-format: pdf
----
-
 ## About the data
 
 Our data is composed of various statistics for season long NFL passing data. We collected the data from Pro Football Reference, one of the most expansive websites for NFL statistics. We collected data from 11 NFL seasons, from 2015 to the most recent season, 2025. We have a csv of the raw data for each season(YEAR_data.csv), and also cleaned the raw data to meet our needs(cleaned_data.csv), which will be the main file we use for analysis.
