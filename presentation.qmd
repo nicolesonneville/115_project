@@ -63,10 +63,79 @@ head(data, 10)
 ```
 
 ## Exploratory Data Analysis
+```{r}
+#2015–2024 
+historical_qbs <- qb_data_clean %>%
+  filter(year >= 2015, year <= 2024)
+
+
+#2025 
+qbs_2025 <- qb_data_clean %>%
+  filter(year == 2025)
+
+historical_qbs <- historical_qbs %>%
+  mutate(comp_rate = Comp_Percentage / 100)
+```
+
 
 ```{r}
-# Allyson's EDA
+
+ggplot(historical_qbs, aes(x = comp_rate)) +
+  geom_histogram(bins = 21, fill = "steelblue", color = "white") +
+  labs(
+    title = "Distribution of QB Completion Rates (2015–2024)",
+    x = "Completion Rate",
+    y = "Number of QB Seasons"
+  )
 ```
+
+
+
+```{r}
+historical_qbs %>%
+  ggplot(aes(x = comp_rate)) +
+  geom_density(fill = "lightblue", alpha = 0.5) +
+  labs(
+    title = "Density of QB Completion Rates",
+    x = "Completion Rate",
+    y = "Density"
+  )
+```
+
+```{r}
+historical_qbs %>%
+  ggplot(aes(x = Attempts, y = comp_rate)) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = "Completion Rate vs Pass Attempts",
+    x = "Attempts",
+    y = "Completion Rate"
+  )
+```
+
+```{r}
+historical_qbs %>%
+  ggplot(aes(x = factor(year), y = comp_rate)) +
+  geom_boxplot() +
+  labs(
+    title = "Completion Rate by Season",
+    x = "Season",
+    y = "Completion Rate"
+  )
+```
+
+```{r}
+historical_qbs %>%
+  ggplot(aes(x = Attempts)) +
+  geom_histogram(bins = 25, fill = "steelblue", color = "white") +
+  labs(
+    title = "Distribution of QB Pass Attempts",
+    x = "Attempts",
+    y = "Count"
+  )
+```
+
+
 
 ## Binomial Hierarchical Modeling
 
