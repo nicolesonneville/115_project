@@ -20,24 +20,26 @@ How can we estimate and compare the **true completion ability** of NFL quarterba
 
 ## Background
 
-- Comparison of quarterbacks is a highly debated topic.
-- Completion percentage is often used as a gauge of quarterback accuracy. 
+- Passing is a main focus of the NFL today, and quarterbacks are integral to a quality passing game
+- Comparison of quarterbacks is a highly debated topic
+- Completion percentage is often used as a gauge of quarterback accuracy 
   - $\text{Completion %} = \frac{\text{Number of Completions}}{\text{Number of Passes Attempted}}$
-- But each quarterback faces unique and different scenarios and challenges throughout the season, so it is difficult to compare players directly.
+- But each quarterback faces unique and different scenarios and challenges throughout the season, so it is difficult to compare players directly
 
-Can we propose a method that allows NFL teams to get a better sense of the true ability of a quarterback?
+Can we propose a method that allows NFL teams to get a better sense of the true accuracy of a quarterback?
 
 ## Data Selection
 
 - Season long quarterback data
-  - Official NFL data from 2015-2025 seasons
+  - Official NFL data from 11 seasons(2015-2025)
   - https://www.pro-football-reference.com
+  - Contains many different passing related statistics
 
 ## Data Cleaning
 
-- Cleaned data to only include data from players who have played enough 
+- Cleaned data to only include data from players who meet a certain threshold
   - kept passing data for only quarterbacks (main throwers of the ball in American football)
-  - removed players who have started 3 games or less than 50 pass attempts
+  - removed players who have started 3 games or less or players with less than 50 pass attempts
 - Cleaned rows when a player appeared multiple times in one year
   - Due to team switches
 
