@@ -125,16 +125,30 @@ historical_qbs %>%
 ```
 
 ```{r}
-historical_qbs %>%
-  ggplot(aes(x = Attempts)) +
-  geom_histogram(bins = 25, fill = "steelblue", color = "white") +
+qb_data_clean %>%
+  ggplot(aes(x = Age)) +
+  geom_histogram(bins = 15, fill = "skyblue", color = "white") +
   labs(
-    title = "Distribution of QB Pass Attempts",
-    x = "Attempts",
-    y = "Count"
-  )
+    title = "Distribution of QB Ages",
+    x = "Age",
+    y = "Number of QB Seasons"
+  ) +
+  theme_minimal()
 ```
 
+```{r}
+qb_data_clean %>%
+  mutate(comp_rate = Completions / Attempts) %>%
+  ggplot(aes(x = Age, y = comp_rate)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", se = FALSE, color = "red") +
+  labs(
+    title = "Completion Rate vs Age",
+    x = "Age",
+    y = "Completion Rate"
+  ) +
+  theme_minimal()
+```
 
 
 ## Binomial Hierarchical Modeling
