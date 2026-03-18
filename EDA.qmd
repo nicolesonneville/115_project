@@ -103,7 +103,7 @@ qb_data_clean %>%
   theme_minimal()
 ```
 
-## Posterior 
+## Posterior
 
 ```{r}
 

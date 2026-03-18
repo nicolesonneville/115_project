@@ -1,0 +1,402 @@
+---
+title: "Beta Binomial"
+format: html
+editor: visual
+---
+
+```{r}
+library(dplyr)
+```
+
+```{r}
+qb_data_clean <- read_csv("./data/cleaned_data.csv")
+
+#2015–2024 to build the prior
+historical_qbs <- qb_data_clean %>%
+  filter(year >= 2015, year <= 2024)
+
+
+#2025 for the posterior analysis
+qbs_2025 <- qb_data_clean %>%
+  filter(year == 2025)
+
+historical_qbs <- historical_qbs %>%
+  mutate(comp_rate = Comp_Percentage / 100)
+```
+
+```{r}
+m <- mean(historical_qbs$comp_rate)
+v <- var(historical_qbs$comp_rate)
+
+m 
+v
+
+alpha_prior <- m * ((m * (1 - m) / v) - 1)
+beta_prior  <- (1 - m) * ((m * (1 - m) / v) - 1)
+
+alpha_prior
+beta_prior
+
+qb_posteriors <- qb_data_clean %>%
+  mutate(
+    alpha_post = alpha_prior + Completions,
+    beta_post  = beta_prior + (Attempts - Completions)
+  )
+```
+
+```{r}
+curve(dbeta(x, alpha_prior, beta_prior), from = 0, to = 1,
+      main = "Estimated Beta prior for QB accuracy",
+      xlab = "True completion probability", ylab = "Density")
+```
+
+```{r}
+posterior_2025 <- qbs_2025 %>%
+  mutate(
+    alpha_post = alpha_prior + Completions,
+    beta_post  = beta_prior + (Attempts - Completions),
+    post_mean  = alpha_post / (alpha_post + beta_post),
+    lower_95   = qbeta(0.025, alpha_post, beta_post),
+    upper_95   = qbeta(0.975, alpha_post, beta_post)
+  ) %>%
+  arrange(desc(post_mean))
+
+posterior_2025
+```
+
+```{r}
+posterior_2025 %>%
+  mutate(raw_rate = Completions / Attempts) %>%
+  ggplot(aes(x = raw_rate, y = post_mean, label = Player)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(
+    title = "Raw completion % vs Bayesian posterior mean",
+    x = "Raw completion rate",
+    y = "Posterior mean of true accuracy"
+  )
+
+```
+
+```{r}
+ranking_table <- posterior_2025 %>%
+  transmute(
+    Player,
+    GS,
+    Attempts,
+    Completions,
+    Raw_Comp_Pct = round(100 * Completions / Attempts, 1),
+    Posterior_Mean = round(100 * post_mean, 1),
+    CI_Lower = round(100 * lower_95, 1),
+    CI_Upper = round(100 * upper_95, 1)
+  ) %>%
+  arrange(desc(Posterior_Mean))
+
+ranking_table
+```
+
+```{r}
+qb1 <- posterior_2025 %>% filter(Player == "Jared Goff")
+qb2 <- posterior_2025 %>% filter(Player == "Matthew Stafford")
+```
+
+```{r}
+set.seed(84735)
+
+draws <- tibble(
+  theta1 = rbeta(10000, qb1$alpha_post, qb1$beta_post),
+  theta2 = rbeta(10000, qb2$alpha_post, qb2$beta_post)
+)
+
+mean(draws$theta1 > draws$theta2)
+```
+
+```{r}
+x_vals <- seq(0.5, 0.8, length.out = 1000)
+
+plot_df <- tibble(
+  x = x_vals,
+  goff = dbeta(x_vals, qb1$alpha_post, qb1$beta_post),
+  stafford = dbeta(x_vals, qb2$alpha_post, qb2$beta_post)
+) %>%
+  pivot_longer(cols = c(goff, stafford), names_to = "QB", values_to = "density")
+
+ggplot(plot_df, aes(x = x, y = density, color = QB)) +
+  geom_line(linewidth = 1) +
+  labs(
+    title = "Posterior distributions of true completion accuracy",
+    x = "True completion probability",
+    y = "Density"
+  )
+```
+
+```{r}
+ggplot(historical_qbs, aes(x = comp_rate)) +
+  geom_histogram(bins = 21, fill = "steelblue", color = "white") +
+  labs(
+    title = "Distribution of QB Completion Rates (2015–2024)",
+    x = "Completion Rate",
+    y = "Number of QB Seasons"
+  )
+```
+
+```{r}
+curve(
+  dbeta(x, alpha_prior, beta_prior),
+  from = 0, to = 1,
+  lwd = 2,
+  col = "darkred",
+  main = "Prior Distribution for QB Accuracy",
+  xlab = "True Completion Probability",
+  ylab = "Density"
+)
+```
+
+```{r}
+ggplot(qbs_2025, aes(x = Attempts, y = Completions / Attempts)) +
+  geom_point(size = 3) +
+  labs(
+    title = "Raw Completion Percentage vs Pass Attempts (2025)",
+    x = "Pass Attempts",
+    y = "Completion Rate"
+  )
+```
+
+```{r}
+posterior_2025 %>%
+  mutate(raw_rate = Completions / Attempts) %>%
+  ggplot(aes(x = raw_rate, y = post_mean)) +
+  geom_point(size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(
+    title = "Raw Completion Rate vs Bayesian Estimate",
+    x = "Raw Completion Rate",
+    y = "Posterior Mean Completion Rate"
+  )
+```
+
+```{r}
+posterior_2025 %>%
+  arrange(post_mean) %>%
+  ggplot(aes(x = post_mean, y = reorder(Player, post_mean))) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = lower_95, xmax = upper_95), height = 0.2) +
+  labs(
+    title = "Posterior Estimates of QB Accuracy (2025)",
+    x = "Posterior Mean Completion Probability",
+    y = "Quarterback"
+  )
+```
+
+```{r}
+posterior_2025 %>%
+  mutate(raw_rate = Completions / Attempts,
+         shrinkage = post_mean - raw_rate) %>%
+  ggplot(aes(x = Attempts, y = shrinkage)) +
+  geom_point() +
+  labs(
+    title = "Bayesian Shrinkage vs Sample Size",
+    x = "Pass Attempts",
+    y = "Posterior Adjustment"
+  )
+```
+
+```{r}
+posterior_2025 %>%
+  mutate(raw_rate = Completions / Attempts) %>%
+  ggplot(aes(x = rank(raw_rate), y = rank(post_mean))) +
+  geom_point() +
+  labs(
+    title = "Ranking Comparison: Raw vs Bayesian",
+    x = "Raw Completion % Rank",
+    y = "Bayesian Rank"
+  )
+```
+
+```{r}
+curve(dbeta(x, alpha_prior, beta_prior), 0, 1, col="red", lwd=2)
+curve(dbeta(x, qb1$alpha_post, qb1$beta_post), add=TRUE, col="blue", lwd=2)
+legend("topright", legend=c("Prior","Posterior"), col=c("red","blue"), lwd=2)
+```
+
+```{r}
+seasons_per_player <- qb_data_clean %>%
+  group_by(Player) %>%
+  summarise(
+    seasons_played = n_distinct(year)
+  ) %>%
+  arrange(desc(seasons_played))
+
+qb_data_clean <- qb_data_clean %>%
+  group_by(Player) %>%
+  mutate(
+    seasons_played = n_distinct(year)
+  ) %>%
+  ungroup()
+
+qb_experience <- qb_data_clean %>%
+  group_by(Player) %>%
+  summarise(
+    seasons_played = n_distinct(year),
+    total_attempts = sum(Attempts, na.rm = TRUE),
+    total_completions = sum(Completions, na.rm = TRUE)
+  ) %>%
+  arrange(desc(seasons_played), desc(total_attempts))
+
+qb_experience
+```
+
+```{r}
+ggplot(seasons_per_player, aes(x = seasons_played)) +
+  geom_histogram(bins = 11) +
+  labs(
+    title = "Distribution of Seasons Played by Quarterbacks",
+    x = "Number of Seasons",
+    y = "Number of Quarterbacks"
+  )
+```
+
+```{r}
+qb_data_clean %>%
+  mutate(comp_rate = Completions / Attempts) %>%
+  ggplot(aes(x = seasons_played, y = comp_rate)) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = "Completion Rate vs Career Experience",
+    x = "Seasons Played",
+    y = "Completion Rate"
+  )
+```
+
+```{r}
+posterior_2025 %>%
+  mutate(raw_rate = Completions / Attempts) %>%
+  ggplot(aes(x = raw_rate, y = post_mean)) +
+  geom_point(size = 3) +
+  geom_abline(linetype = "dashed") +
+  labs(
+    title = "Raw Completion Rate vs Bayesian Estimate",
+    x = "Raw Completion Rate",
+    y = "Posterior Mean Completion Probability"
+  )
+```
+
+```{r}
+posterior_2025 %>%
+  arrange(post_mean) %>%
+  ggplot(aes(x = post_mean, y = reorder(Player, post_mean))) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = lower_95, xmax = upper_95), height = 0.2) +
+  labs(
+    title = "Posterior Estimates of QB Accuracy",
+    x = "Posterior Mean Completion Probability",
+    y = "Quarterback"
+  )
+```
+
+```{r}
+historical_qbs %>%
+  ggplot(aes(x = comp_rate)) +
+  geom_density(fill = "lightblue", alpha = 0.5) +
+  labs(
+    title = "Density of QB Completion Rates",
+    x = "Completion Rate",
+    y = "Density"
+  )
+```
+
+```{r}
+historical_qbs %>%
+  ggplot(aes(x = Attempts, y = comp_rate)) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = "Completion Rate vs Pass Attempts",
+    x = "Attempts",
+    y = "Completion Rate"
+  )
+```
+
+```{r}
+historical_qbs %>%
+  ggplot(aes(x = factor(year), y = comp_rate)) +
+  geom_boxplot() +
+  labs(
+    title = "Completion Rate by Season",
+    x = "Season",
+    y = "Completion Rate"
+  )
+```
+
+```{r}
+historical_qbs %>%
+  ggplot(aes(x = Attempts)) +
+  geom_histogram(bins = 25, fill = "orange") +
+  labs(
+    title = "Distribution of QB Pass Attempts",
+    x = "Attempts",
+    y = "Count"
+  )
+```
+
+```{r}
+qb_data_clean %>%
+  mutate(comp_rate = Completions / Attempts) %>%
+  ggplot(aes(x = seasons_played, y = comp_rate)) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = "Completion Rate vs Career Experience",
+    x = "Seasons Played",
+    y = "Completion Rate"
+  )
+```
+
+```{r}
+historical_qbs %>%
+  mutate(comp_rate = Completions / Attempts) %>%
+  arrange(desc(comp_rate)) %>%
+  slice(1:10) %>%
+  ggplot(aes(x = comp_rate, y = reorder(Player, comp_rate))) +
+  geom_col() +
+  labs(
+    title = "Top Historical QB Completion Rates",
+    x = "Completion Rate",
+    y = "Quarterback"
+  )
+```
+
+```{r}
+theta <- seq(0, 1, length.out = 1000)
+
+prior_df <- data.frame(
+  theta = theta,
+  density = dbeta(theta, alpha_prior, beta_prior)
+)
+
+ggplot(prior_df, aes(x = theta, y = density)) +
+  geom_line(color = "darkred") +
+  labs(
+    title = "Prior Distribution for QB Completion Probability",
+    x = "Completion Probability",
+    y = "Density"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+posterior_df <- data.frame(
+  theta = theta,
+  prior = dbeta(theta, alpha_prior, beta_prior),
+  posterior = dbeta(theta, alpha_post, beta_post)
+)
+
+ggplot(posterior_df, aes(x = theta)) +
+  geom_line(aes(y = prior, color = "Prior"), size = 1.2) +
+  geom_line(aes(y = posterior, color = "Posterior"), size = 1.2) +
+  labs(
+    title = "Prior vs Posterior Distribution of QB Accuracy",
+    x = "Completion Probability",
+    y = "Density",
+    color = ""
+  ) +
+  theme_minimal()
+```
