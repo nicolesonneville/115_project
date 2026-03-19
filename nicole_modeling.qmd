@@ -118,7 +118,7 @@ cleaned_data <- cleaned_data %>%
   mutate(
     Missed = Attempts - Completions
   ) %>%
-  select(Player, year, Completions, Missed, Attempts, year)
+  select(Player, year, Completions, Missed, Attempts, year, Age)
 ```
 
 ```{r}
@@ -131,7 +131,7 @@ data_2025 <- cleaned_data %>%
 
 ```{r}
 hist_model <- stan_glmer(
-  cbind(Completions, Missed) ~ 1 + (1 | Player) + (1 | year),
+  cbind(Completions, Missed) ~ Age + (1 | year),
   data = historical,
   family = binomial(link = "logit"),
   chains = 4,
@@ -142,21 +142,24 @@ hist_model <- stan_glmer(
 ```
 
 ```{r}
-posterior <- as.data.frame(hist_model)
-mu_mean <- mean(posterior$`(Intercept)`)
-mu_sd   <- sd(posterior$`(Intercept)`)
+stats_hist <- summary(hist_model)
+
+intercept_mean <- stats_hist["(Intercept)", "mean"]
+intercept_sd   <- stats_hist["(Intercept)", "sd"]
+
+age_mean <- stats_hist["Age", "mean"]
+age_sd   <- stats_hist["Age", "sd"]
 ```
 
 ```{r}
-model_2025 <- stan_glmer(
-  cbind(Completions, Missed) ~ 1 + (1 | Player),
+model_2025 <- stan_glm(
+  cbind(Completions, Missed) ~ Age,
   data = data_2025,
   family = binomial(link = "logit"),
-  prior = normal(mu_mean, mu_sd),
-  prior_aux = exponential(1),
+  prior_intercept = normal(location = intercept_mean, scale = intercept_sd),
+  prior = normal(location = age_mean, scale = age_sd),
   chains = 4,
   iter = 5000*2,
-  seed = 123, 
   refresh = FALSE
 )
 ```
