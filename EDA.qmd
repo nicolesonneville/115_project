@@ -1,0 +1,179 @@
+---
+title: "EDA"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+#| message: false
+data <- read_csv("data/cleaned_data.csv")
+data <- data %>%
+  select(year, Player, Age, GS, Wins, Completions, Attempts, Comp_Percentage)
+
+head(data, 10)
+```
+
+## Exploratory Data Analysis
+
+```{r}
+#2015–2024 
+historical_qbs <- qb_data_clean %>%
+  filter(year >= 2015, year <= 2024)
+
+
+#2025 
+qbs_2025 <- qb_data_clean %>%
+  filter(year == 2025)
+
+historical_qbs <- historical_qbs %>%
+  mutate(comp_rate = Comp_Percentage / 100)
+```
+
+```{r}
+
+ggplot(historical_qbs, aes(x = comp_rate)) +
+  geom_histogram(bins = 21, fill = "steelblue", color = "white") +
+  labs(
+    title = "Distribution of QB Completion Rates (2015–2024)",
+    x = "Completion Rate",
+    y = "Number of QB Seasons"
+  )
+```
+
+```{r}
+historical_qbs %>%
+  ggplot(aes(x = comp_rate)) +
+  geom_density(fill = "lightblue", alpha = 0.5) +
+  labs(
+    title = "Density of QB Completion Rates",
+    x = "Completion Rate",
+    y = "Density"
+  )
+```
+
+```{r}
+historical_qbs %>%
+  ggplot(aes(x = Attempts, y = comp_rate)) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = "Completion Rate vs Pass Attempts",
+    x = "Attempts",
+    y = "Completion Rate"
+  )
+```
+
+```{r}
+historical_qbs %>%
+  ggplot(aes(x = factor(year), y = comp_rate)) +
+  geom_boxplot() +
+  labs(
+    title = "Completion Rate by Season",
+    x = "Season",
+    y = "Completion Rate"
+  )
+```
+
+```{r}
+qb_data_clean %>%
+  ggplot(aes(x = Age)) +
+  geom_histogram(bins = 15, fill = "skyblue", color = "white") +
+  labs(
+    title = "Distribution of QB Ages",
+    x = "Age",
+    y = "Number of QB Seasons"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+qb_data_clean %>%
+  mutate(comp_rate = Completions / Attempts) %>%
+  ggplot(aes(x = Age, y = comp_rate)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", se = FALSE, color = "red") +
+  labs(
+    title = "Completion Rate vs Age",
+    x = "Age",
+    y = "Completion Rate"
+  ) +
+  theme_minimal()
+```
+
+## Posterior 
+
+```{r}
+
+#2015–2024 to build the prior
+historical_qbs <- qb_data_clean %>%
+  filter(year >= 2015, year <= 2024)
+
+#2025 for the posterior analysis
+qbs_2025 <- qb_data_clean %>%
+  filter(year == 2025)
+
+
+m <- mean(historical_qbs$comp_rate)
+v <- var(historical_qbs$comp_rate)
+
+m 
+v
+
+alpha_prior <- m * ((m * (1 - m) / v) - 1)
+beta_prior  <- (1 - m) * ((m * (1 - m) / v) - 1)
+
+alpha_prior
+beta_prior
+
+qb_posteriors <- qb_data_clean %>%
+  mutate(
+    alpha_post = alpha_prior + Completions,
+    beta_post  = beta_prior + (Attempts - Completions)
+  )
+```
+
+```{r}
+posterior_2025 <- qbs_2025 %>%
+  mutate(
+    alpha_post = alpha_prior + Completions,
+    beta_post  = beta_prior + (Attempts - Completions),
+    post_mean  = alpha_post / (alpha_post + beta_post),
+    lower_95   = qbeta(0.025, alpha_post, beta_post),
+    upper_95   = qbeta(0.975, alpha_post, beta_post)
+  ) %>%
+  arrange(desc(post_mean))
+
+posterior_2025
+```
+
+```{r}
+posterior_2025 %>%
+  mutate(
+    raw_rate = Completions / Attempts,
+    shrinkage = post_mean - raw_rate
+  ) %>%
+  ggplot(aes(x = Age, y = shrinkage)) +
+  geom_point() +
+  labs(
+    title = "Bayesian Shrinkage vs Age",
+    x = "Age",
+    y = "Posterior Adjustment"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+posterior_2025 %>%
+  ggplot(aes(x = Age, y = post_mean)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE, color = "blue") +
+  labs(
+    title = "Estimated QB Accuracy vs Age",
+    x = "Age",
+    y = "Posterior Mean Completion Probability"
+  ) +
+  theme_minimal()
+```
