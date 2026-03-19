@@ -20,13 +20,21 @@ How can we estimate and compare the **true completion ability** of NFL quarterba
 
 ## Background
 
-- Passing is a main focus of the NFL today, and quarterbacks are integral to a quality passing game
-- Comparison of quarterbacks is a highly debated topic
-- Completion percentage is often used as a gauge of quarterback accuracy 
-  - $\text{Completion %} = \frac{\text{Number of Completions}}{\text{Number of Passes Attempted}}$
-- But each quarterback faces unique and different scenarios and challenges throughout the season, so it is difficult to compare players directly
+- Passing is almost synonymous with winning in the NFL
+  - Pass: When the football is thrown from 1 player to another
+  - Completion: A pass where the ball was caught by the receiver
+- Quarterbacks(QB) are integral to a good passing team
+  - They are the ones who always throw the ball!
+- Comparison of NFL quarterbacks is a highly debated topic
 
-Can we propose a method that allows NFL teams to get a better sense of the true accuracy of a quarterback?
+## Passing Attempts and Completions
+- Completion percentage is often used as a gauge of QB accuracy 
+  - $\text{Completion %} = \frac{\text{Number of Completions}}{\text{Number of Passes Attempted}}$
+- Difficult to directly compare completion rate between quarterbacks
+  - Each QB faces unique scenarios and challenges(ex. some QBs have better teams than others)
+
+How can we use historical data to model a quarterback's "true" accuracy while accounting for situational variance?
+
 
 ## Data Selection
 
@@ -50,15 +58,14 @@ Can we propose a method that allows NFL teams to get a better sense of the true 
   - `Completions`: Number of passes completed in a season
   - `Attempts`: Number of passes attempted in a season
   - `Comp_Percentage`: Completion percentage, calculated by $\frac{\text{Number of Completions}}{\text{Number of Passes Attempted}}$
-- Other variables include number of wins, number of touchdowns thrown, number of interceptions thrown, QB rating, number of sacks taken
-  - These columns were not integral to our research question
+- Ignored columns irrelevant to our analysis
 
-## Dataset
+## Dataset Preview
 
 ```{r}
 #| message: false
 data <- read_csv("data/cleaned_data.csv")
-data <- data %>%
+qb_data_clean <- data %>%
   select(year, Player, Age, GS, Wins, Completions, Attempts, Comp_Percentage)
 
 head(data, 10)
