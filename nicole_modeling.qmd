@@ -4,6 +4,8 @@ format: pdf
 editor: visual
 ---
 
+### Final pipeline
+
 ```{r}
 library(tidyverse)
 library(rstanarm)
@@ -34,14 +36,15 @@ hist_model <- stan_glmer(
   data = historical,
   family = binomial(link = "logit"),
   chains = 4,
-  iter = 4000,
-  seed = 123
+  iter = 5000*2,
+  seed = 123,
+  refresh = FALSE
 )
 ```
 
 ```{r}
 posterior <- as.data.frame(hist_model)
-mu_mean <- mean(posterior$`(Intercept)`)
+mu_median <- median(posterior$`(Intercept)`)
 mu_sd   <- sd(posterior$`(Intercept)`)
 ```
 
@@ -50,116 +53,11 @@ model_2025 <- stan_glmer(
   cbind(Completions, Missed) ~ 1 + (1 | Player),
   data = data_2025,
   family = binomial(link = "logit"),
-  prior = normal(mu_mean, mu_sd),
+  prior_intercept = normal(location = mu_median, scale =  mu_sd),
   prior_aux = exponential(1),
   chains = 4,
-  iter = 4000,
-  seed = 123
-)
-```
-
-```{r}
-# Summary table for intercept and random effects
-summary(model_2025)
-```
-
-```{r}
-# Extract random effects as data frame
-player_re <- ranef(model_2025)$Player
-
-# Convert to tibble and include Player as a column
-qb_effects <- player_re %>%
-  as_tibble(rownames = "Player") %>%
-  rename(Player_Effect = `(Intercept)`)
-
-qb_effects
-
-mu <- fixef(model_2025)[1]  # league-average logit
-
-qb_effects <- qb_effects %>%
-  mutate(
-    Estimated_Accuracy = plogis(mu + Player_Effect)
-  )
-
-#qb_effects
-
-qb_ranking <- qb_effects %>%
-  arrange(desc(Estimated_Accuracy))
-
-qb_ranking
-```
-
-```{r}
-# Make sure the Player names match exactly between tables
-qb_ranking_actual <- qb_ranking %>%
-  left_join(
-    X2025_data %>% 
-      select(Player, CmpPct = `Cmp%`) %>%  # select Player and actual completion %
-      mutate(Actual_Completion = CmpPct / 100),
-    by = "Player"
-  ) %>%
-  select(Player, Estimated_Accuracy, Actual_Completion)  # keep only relevant columns
-
-qb_ranking_actual
-```
-
-### Final pipeline
-
-```{r}
-library(tidyverse)
-library(rstanarm)
-
-cleaned_data <- read_csv("data/cleaned_data.csv")
-glimpse(data)
-```
-
-```{r}
-cleaned_data <- cleaned_data %>%
-  mutate(
-    Missed = Attempts - Completions
-  ) %>%
-  select(Player, year, Completions, Missed, Attempts, year, Age)
-```
-
-```{r}
-historical <- cleaned_data %>%
-  filter(year < 2025)
-
-data_2025 <- cleaned_data %>%
-  filter(year == 2025)
-```
-
-```{r}
-hist_model <- stan_glmer(
-  cbind(Completions, Missed) ~ Age + (1 | year),
-  data = historical,
-  family = binomial(link = "logit"),
-  chains = 4,
   iter = 5000*2,
-  seed = 123,
-  refresh = FALSE
-)
-```
-
-```{r}
-stats_hist <- summary(hist_model)
-
-intercept_mean <- stats_hist["(Intercept)", "mean"]
-intercept_sd   <- stats_hist["(Intercept)", "sd"]
-
-age_mean <- stats_hist["Age", "mean"]
-age_sd   <- stats_hist["Age", "sd"]
-```
-
-```{r}
-model_2025 <- stan_glm(
-  cbind(Completions, Missed) ~ Age,
-  data = data_2025,
-  family = binomial(link = "logit"),
-  prior_intercept = normal(location = intercept_mean, scale = intercept_sd),
-  prior = normal(location = age_mean, scale = age_sd),
-  chains = 4,
-  iter = 5000*2,
+  seed = 123, 
   refresh = FALSE
 )
 ```
@@ -202,11 +100,12 @@ mae_2025
 ```
 
 ```{r}
-library(loo)
+y_actual <- data_2025$Completions
+y_rep <- posterior_predict(model_2025)
 
-if (any(pareto_k_values(loo_2025) > 0.7)) {
-  loo_2025 <- loo(model_2025, k_threshold = 0.7, cores = 2)
-}
+ppc_dens_overlay(y_actual, y_rep[1:100, ]) +
+  labs(title = "Posterior Predictive Check",
+       subtitle = "Actual completions vs. 100 simulated versions")
 ```
 
 ### Checking if random intercepts are needed
