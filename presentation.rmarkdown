@@ -18,6 +18,8 @@ library(broom.mixed)
 library(matrixStats)
 ```
 
+
+
 ## Project Question
 
 How can we estimate and compare the **true completion ability** of NFL quarterbacks by accounting for variability in **sample size** and **game conditions** using Bayesian statistics?
@@ -69,6 +71,8 @@ How can we use historical data to model a quarterback's "true" accuracy while ac
 
 ## Dataset Preview
 
+
+
 ```{r}
 #| message: false
 cleaned_data <- read_csv("data/cleaned_data.csv")
@@ -78,7 +82,11 @@ qb_data_clean <- cleaned_data %>%
 head(qb_data_clean, 10)
 ```
 
+
+
 ## Exploratory Data Analysis
+
+
 
 ```{r}
 cleaned_data <- cleaned_data %>%
@@ -103,9 +111,13 @@ ggplot(historical, aes(x = Comp_Percentage / 100)) +
   theme_minimal()
 ```
 
+
+
 Most QBs cluster between **58–70%**, with the distribution roughly bell-shaped around ~64% and few outliers.
 
 ## Exploratory Data Analysis
+
+
 
 ```{r}
 qb_data_clean %>%
@@ -119,9 +131,13 @@ qb_data_clean %>%
   theme_minimal()
 ```
 
+
+
 Age peaks in the **mid-to-late 20s**. Younger QBs may have noisier completion rates — the hierarchical model's shrinkage is especially important for players with fewer seasons.
 
 ## Exploratory Data Analysis
+
+
 
 ```{r}
 historical %>%
@@ -135,9 +151,13 @@ historical %>%
   )
 ```
 
+
+
 QBs with **more attempts stabilize** around the league mean — motivating **partial pooling** in our model. High-attempt QBs provide reliable signal; low-attempt QBs are shrunk toward the average.
 
 ## Exploratory Data Analysis
+
+
 
 ```{r}
 historical %>%
@@ -149,6 +169,8 @@ historical %>%
     y = "Completion Rate"
   )
 ```
+
+
 
 Median completion % has **gradually increased** over the decade — suggesting a league-wide shift toward higher-efficiency passing. This justifies including a **year-level random effect**.
 
@@ -162,6 +184,8 @@ We used **2015–2024** to build an empirical prior, then apply it to **2025** d
 ##
 
 We fit a Binomial hierarchical model with random intercepts for player and year using the historical data (2015-2024) and pulled the median and SD to use as our prior.
+
+
 
 ```{r}
 #| include: True
@@ -182,9 +206,13 @@ mu_median <- median(posterior$`(Intercept)`)
 mu_sd   <- sd(posterior$`(Intercept)`)
 ```
 
+
+
 ##
 
 Fit the same model on 2025 data only, plugging in `mu_median` and `mu_sd` from Step 1.
+
+
 
 ```{r}
 #| include: True
@@ -201,7 +229,11 @@ model_2025 <- stan_glmer(
 )
 ```
 
+
+
 ## MCMC Trace Plot
+
+
 
 ```{r}
 posterior_array <- as.array(model_2025)
@@ -211,25 +243,37 @@ posterior_array <- as.array(model_2025)
 mcmc_trace(posterior_array, 
            pars = c("(Intercept)", "Sigma[Player:(Intercept),(Intercept)]"))
 ```
+
+
 Chains are mixing well.
 
 ## MCMC Autocorrelation Plot
+
+
 
 ```{r}
 mcmc_acf(posterior_array, 
          pars = c("(Intercept)", "Sigma[Player:(Intercept),(Intercept)]"))
 ```
+
+
 Autocorrelation drops quickly to near zero.
 
 ## MCMC Posterior Densities
+
+
 
 ```{r}
 mcmc_dens_overlay(posterior_array, 
            pars = c("(Intercept)", "Sigma[Player:(Intercept),(Intercept)]"))
 ```
+
+
 All four chains have nearly identical density curves, confirming convergence to the same posterior.
 
 ## Predictive Posterior Check
+
+
 
 ```{r}
 y_actual <- data_2025$Completions
@@ -239,9 +283,13 @@ ppc_dens_overlay(y_actual, y_rep[1:100, ]) +
   labs(title = "Posterior Predictive Check",
        subtitle = "Actual completions vs. 100 simulated versions")
 ```
+
+
 Simulated distributions closely follow the observed distribution.
 
 ##
+
+
 
 ```{r}
 post_preds <- posterior_epred(model_2025)
@@ -251,9 +299,13 @@ actual_rates <- data_2025$Completions / (data_2025$Completions + data_2025$Misse
 mae_2025 <- mean(abs(mu_preds - actual_rates))
 cat("Mean Absolute Error (2025):", round(mae_2025, 4))
 ```
+
+
 MAE measures the average absolute difference between the **posterior mean predicted completion rate** and the **observed rate** across all 2025 QBs.
 
 ## Year Random Effects
+
+
 
 ```{r}
 # Full Model (What you have now)
@@ -273,9 +325,13 @@ ggplot(year_intercepts, aes(x = level, y = estimate)) +
        x = "Year", y = "Adjustment to Completion Rate") +
   theme_minimal()
 ```
+
+
 Each year gets a random adjustment in **log-odds** relative to the global mean. Positive = easier year for completions league-wide. Captures rule changes, weather trends, or strategic shifts affecting all QBs equally.
 
 ## Player Random Effects
+
+
 
 ```{r}
 player_intercepts <- tidy(fit_both, effects = "ran_vals") %>% 
@@ -291,9 +347,13 @@ ggplot(player_intercepts, aes(x = reorder(level, estimate), y = estimate)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) # Rotates names 45 degrees
 ```
+
+
 QBs with **fewer seasons are pulled more strongly** toward the mean (regularization). Positive = above-average accuracy; negative = below. More informative than raw % — accounts for sample size and year effects.
 
 ##
+
+
 
 ```{r}
 historical$year_idx <- historical$year - min(historical$year)
@@ -313,9 +373,13 @@ fit_slope <- stan_glmer(
 )
 ```
 
+
+
 ## Top 10 Players from the 2025 Data vs Our Model
 
 We extract each QB's **posterior median completion probability** by using `posterior_epred()` to get full posterior draws, then computing the median and 95% credible interval per player.
+
+
 ```{r}
 # 1. Extract posterior draws (rows = draws, cols = observations)
 re_draws <- posterior_epred(model_2025, re.form = NULL)
