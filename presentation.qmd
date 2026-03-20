@@ -16,6 +16,9 @@ library(rstanarm)
 library(bayesplot)
 library(broom.mixed)
 library(matrixStats)
+library(tidybayes)
+library(scales)
+library(kableExtra)
 ```
 
 ## Project Question
@@ -31,16 +34,15 @@ How can we estimate and compare the **true completion ability** of NFL quarterba
 
 Quarterbacks **(QB)** are integral to a good passing team.
 
--   They are the ones who always throw the ball!
 -   Comparison of NFL quarterbacks is a highly debated topic.
 
-## Why Raw Completion Percentage Is Not Enough:
+## [Why Raw Completion % Is Not Enough]{style="font-size: 0.75em;"}
 
 -   Completion percentage is often a gauge of QB accuracy. $$\scriptsize \text{Completion %} = \frac{\text{Number of Completions}}{\text{Number of Pass Attempts}}$$
 -   Direct comparison of QB completion rates is difficult since each QB faces unique scenarios and challenges.
     -   (ex: some QBs have better teams than others)
 
-How can we use historical data to model a quarterback's "true" accuracy while accounting for situational variance?
+How can we use historical data to model a QB's "true" accuracy while accounting for situational variance?
 
 ## Data Selection
 
@@ -63,7 +65,7 @@ How can we use historical data to model a quarterback's "true" accuracy while ac
 -   Main variables: `Completions`, `Attempts`, `Comp_Percentage`
     -   `Completions`: Number of passes completed in a season.
     -   `Attempts`: Number of passes attempted in a season.
-    -   `Comp_Percentage`: Accuracy metric calculated by $\frac{\text{Number of Completions}}{\text{Number of Pass Attempts}}$.
+    -   `Comp_Percentage`: Accuracy metric.
 
 ## Dataset Preview
 
@@ -71,7 +73,8 @@ How can we use historical data to model a quarterback's "true" accuracy while ac
 #| message: false
 cleaned_data <- read_csv("data/cleaned_data.csv")
 qb_data_clean <- cleaned_data %>%
-  select(year, Player, Age, GS, Wins, Completions, Attempts, Comp_Percentage)
+  select(year, Player, Age, GS, Wins, Completions, Attempts, Comp_Percentage) %>%
+  rename(Games = GS)
 
 head(qb_data_clean, 10)
 ```
@@ -106,22 +109,6 @@ Most QBs cluster between **58–70%**, with the distribution roughly bell-shaped
 ## Exploratory Data Analysis
 
 ```{r}
-qb_data_clean %>%
-  ggplot(aes(x = Age)) +
-  geom_histogram(bins = 15, fill = "steelblue", color = "white") +
-  labs(
-    title = "Distribution of QB Ages",
-    x = "Age",
-    y = "Number of QB Seasons"
-  ) +
-  theme_minimal()
-```
-
-Age peaks in the **mid-to-late 20s**. Younger QBs may have noisier completion rates — the hierarchical model's shrinkage is especially important for players with fewer seasons.
-
-## Exploratory Data Analysis
-
-```{r}
 historical %>%
   ggplot(aes(x = Attempts, y = Comp_Percentage / 100, color = Age)) +
   geom_point(alpha = 1, size = 2) +
@@ -133,7 +120,7 @@ historical %>%
   )
 ```
 
-QBs with **more attempts stabilize** around the league mean — motivating **partial pooling** in our model. High-attempt QBs provide reliable signal; low-attempt QBs are shrunk toward the average.
+QBs with **more attempts stabilize** around the league mean, motivating **partial pooling** in our model.
 
 ## Exploratory Data Analysis
 
@@ -148,20 +135,20 @@ historical %>%
   )
 ```
 
-Median completion % has **gradually increased** over the decade — suggesting a league-wide shift toward higher-efficiency passing. This justifies including a **year-level random effect**.
+Median completion % has **gradually increased**, suggesting a league-wide shift toward better passing and justifying a **year-level random effect**.
 
 ## Binomial Hierarchical Modeling
 
-QB seasons are correlated — the same player appears across multiple years. A hierarchical model estimates **random intercepts** for each QB and each year, shrinking players with few seasons toward the league average. This prevents overfitting on small samples.
+QB seasons are correlated since QBs usually play several years.
 
-We used **2015–2024** to build an empirical prior, then apply it to **2025** data. This lets us anchor our 2025 estimates to a decade of historical performance.
+A hierarchical model estimates completion percentage using **random intercepts** for each QB, shrinking players with few seasons toward the league average. This prevents overfitting on small samples.
 
-## 
+## Building Our Prior
 
-We fit a Binomial hierarchical model with random intercepts for player and year using the historical data (2015-2024) and pulled the median and SD to use as our prior.
+We used **2015–2024** to build a prior, then apply it to **2025** data. This lets us anchor our 2025 estimates to a decade of historical performance.
 
 ```{r}
-#| include: True
+#| echo: True
 hist_model <- stan_glmer(
   cbind(Completions, Missed) ~ 1 + (1 | Player) + (1 | year),
   data = historical,
@@ -174,17 +161,18 @@ hist_model <- stan_glmer(
 ```
 
 ```{r}
+#| echo: True
 posterior <- as.data.frame(hist_model)
 mu_median <- median(posterior$`(Intercept)`)
 mu_sd   <- sd(posterior$`(Intercept)`)
 ```
 
-## 
+## Building Our Posterior
 
-Fit the same model on 2025 data only, plugging in `mu_median` and `mu_sd` from Step 1.
+We fit the same model on 2025 data only, plugging in `mu_median` and `mu_sd` from our prior.
 
 ```{r}
-#| include: True
+#| echo: True
 model_2025 <- stan_glmer(
   cbind(Completions, Missed) ~ 1 + (1 | Player),
   data = data_2025,
@@ -232,60 +220,16 @@ All four chains have nearly identical density curves, confirming convergence to 
 ## Predictive Posterior Check
 
 ```{r}
-y_actual <- data_2025$Completions
-y_rep <- posterior_predict(model_2025)
-
-ppc_dens_overlay(y_actual, y_rep[1:100, ]) +
+pp_check(model_2025, nreps = 100) +
   labs(title = "Posterior Predictive Check",
-       subtitle = "Actual completions vs. 100 simulated versions")
+       subtitle = "Actual Completion % vs. 100 Simulated Distributions")
 ```
 
-Simulated distributions closely follow the observed distribution.
+Simulated distributions generally follow the observed distribution.
 
-## 
-
-```{r}
-post_preds <- posterior_epred(model_2025)
-mu_preds <- colMeans(post_preds)
-actual_rates <- data_2025$Completions / (data_2025$Completions + data_2025$Missed)
-
-mae_2025 <- mean(abs(mu_preds - actual_rates))
-cat("Mean Absolute Error (2025):", round(mae_2025, 4))
-```
-
-MAE measures the average absolute difference between the **posterior mean predicted completion rate** and the **observed rate** across all 2025 QBs.
-
-## Year Random Effects
+## Player Random Intercepts
 
 ```{r}
-# Full Model (What you have now)
-fit_both <- stan_glmer(cbind(Completions, Missed) ~ 1 + (1 | Player) + (1 | year), 
-                       data = historical, family = binomial, refresh = FALSE)
-```
-
-```{r}
-year_intercepts <- tidy(fit_both, effects = "ran_vals") %>% 
-  filter(group == "year")
-
-ggplot(year_intercepts, aes(x = level, y = estimate)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(title = "Relative Difficulty by Year (Log-Odds)",
-       x = "Year", y = "Adjustment to Completion Rate") +
-  theme_minimal()
-```
-
-Each year gets a random adjustment in **log-odds** relative to the global mean. Positive = easier year for completions league-wide. Captures rule changes, weather trends, or strategic shifts affecting all QBs equally.
-
-## Player Random Effects
-
-```{r}
-library(dplyr)
-library(ggplot2)
-library(tidybayes)
-library(scales)
-
 # top 20 players
 top_20_players <- data_2025 %>%
   group_by(Player) %>%
@@ -307,71 +251,35 @@ player_previews_20 <- data_top_20 %>%
   add_epred_draws(model_2025)
 
 ggplot(player_previews_20, aes(x = .epred, y = reorder(Player, .epred))) +
+  # observed completion rate
   # 95% and 80% credible intervals
   stat_pointinterval(.width = c(.80, .95), color = "steelblue") +
-  # convert to %
+  geom_point(
+    data = data_top_20,
+    aes(x = Comp_Percentage / 100, y = Player),
+    color = "black", size = 2, stroke = 1.2
+  ) +
   scale_x_continuous(
     labels = percent_format(accuracy = 1),
     breaks = seq(0, 1, by = 0.02)
   ) +
   labs(
     title = "Top 20 Quarterbacks: Predicted 2025 Completion Rates",
-    subtitle = "95% and 80% Credible Intervals",
+    subtitle = "95% and 80% Credible Intervals with Actual Rate in Black",
     x = "Expected Completion Percentage",
     y = NULL
   ) +
   theme_minimal() +
   theme(
     panel.grid.minor = element_blank(),
-    axis.text.y = element_text(face = "bold")
+    axis.text.y = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
   )
 ```
 
-QBs with **fewer seasons are pulled more strongly** toward the mean (regularization). Positive = above-average accuracy; negative = below. More informative than raw % — accounts for sample size and year effects.
+This plot displays the modeled completion rates and credible intervals for the top 20 QBs.
 
-## 
-
-```{r}
-historical$year_idx <- historical$year - min(historical$year)
-
-fit_intercept <- stan_glmer(
-  cbind(Completions, Missed) ~ year_idx + (1 | Player) + (1 | year),
-  data = historical,
-  family = binomial(link = "logit"),
-  cores = 2, seed = 123, refresh = FALSE
-)
-
-fit_slope <- stan_glmer(
-  cbind(Completions, Missed) ~ year_idx + (1 + year_idx | Player) + (1 | year),
-  data = historical,
-  family = binomial(link = "logit"),
-  cores = 2, seed = 123, refresh = FALSE
-)
-```
-
-Players with **positive slopes** are improving their completion rate over time; **negative slopes** indicate decline. This is only possible because the random-slope model won the model comparison.
-
-## 
-
-```{r}
-# Extract the slope estimates for each player
-player_slopes <- tidy(fit_slope, effects = "ran_vals") %>% 
-  filter(term == "year_idx")
-
-ggplot(player_slopes, aes(x = reorder(level, estimate), y = estimate)) +
-  geom_point() +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  coord_flip() +
-  labs(title = "Who is Improving vs. Declining?",
-       subtitle = "Positive = Improving completion rate over time",
-       x = "Player", y = "Slope (Rate of Change)") +
-  theme_minimal()
-```
-This plot displays the modeled completion rates and credible intervals for the top 20 QBs. Through partial pooling, the model applies shrinkage, pulling high variance estimates from small sample sizes towards the league average.
-
-## Top 10 Players from the 2025 Data vs Our Model
-
-We extract each QB's **posterior median completion probability** by using `posterior_epred()` to get full posterior draws, then computing the median and 95% credible interval per player.
+## [Top 10 Players: 2025 Data vs Our Model]{style="font-size: 0.75em;"}
 
 ```{r}
 # 1. Extract posterior draws (rows = draws, cols = observations)
@@ -409,82 +317,47 @@ model_tbl <- top_10_model %>%
     `Model %`  = post_median,
     `CI Lower` = post_lower,
     `CI Upper` = post_upper
-  ) 
+  )
+
+joined_tbl <- raw_tbl %>%
+  full_join(model_tbl, by = "Player") %>%
+  rename(Data_Rank = Rank.x, Model_Rank = Rank.y, CI_lo = `CI Lower`, CI_hi = `CI Upper`) %>%
+  select(Player, Data_Rank, Model_Rank, `Comp %`, `Model %`, CI_lo, CI_hi)
 ```
 
 ```{r}
-raw_tbl
-model_tbl
+joined_tbl
 ```
 
-## Current Limitations 
+We extract each QB's **posterior median completion probability**, then computing the median and 95% credible interval per player.
 
-Random Effects
+## Current Limitations
 
--   Limited repeated data for many individual Quarterbacks
+Computation Time
 
-    -   1-2 seasons only
-
-    -   Few attempts
-
-    -   High uncertainty in player effects
-
-    -   Shrinkage toward the mean
-
-Aggregated Data
-
--   Game situations (red zone)
-
--   Within-season variability
-
--   Missing Context
-
-    -   Defensive strength
-
-    -   Receiver separation (distance)
-
-    -   Weather conditions
-
-    -   Past/Current Injuries
-
-Reflect more than just QB skill
+-   Random slopes for how completion percentage for each player changes over time
+-   Add more predictors that reflect the game context or teammate performance rather than QB skill.
 
 Statistical Model
 
--   Does not capture:
-
-    -   Player Improvement
-
-    -   Age overtime
+-   Does not capture player improvement or age overtime.
 
 ## With Unlimited time and Resources
 
-More Data
+**More play-by-play data** including throw difficulty, defensive pressure, game context.
 
--   Play by play
+**Missing context** including defensive strength, receiver separation (distance), weather conditions, past/current injuries
 
-    -   Throw Difficulty
-
-    -   Defensive Pressure
-
-    -   Game Context
-
-Stronger Hierarchical Model
+**Stronger Hierarchical Model**
 
 -   Add team, opponent, and situation effects
-
 -   Time-varying component to model careers
-
-Better Player Estimates
-
--   More observation per QB for stronger random effects
-
 -   Separate the true QB accuracy and external influences
 
-## Future Impacts 
+## Impacts and Importance
 
--   Our analysis provides valuable insights into NFL passing trends and a new framework for evaluating quarterback accuracy
+-   Our analysis provides valuable insights into NFL passing trends and a new framework for evaluating QB accuracy.
 
-    -   Our per season modeling provides insights of general NFL trends and how overall quarterback play has changed
+    -   Our per season modeling provides insights of general NFL trends and how overall quarterback play has changed.
 
-    -   Our per player modeling gives NFL teams a better understanding of a player’s true completion ability, which is valuable when deciding
+    -   Our per player modeling gives NFL teams a better understanding of a player’s true completion ability, which is valuable when comparing QBs. 
