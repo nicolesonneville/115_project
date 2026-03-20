@@ -1,16 +1,14 @@
----
-title: "EDA"
-format: html
-editor: visual
----
+### EDA
 
 ```{r}
+#| message: false
 library(tidyverse)
+library(here)
 ```
 
 ```{r}
 #| message: false
-data <- read_csv("data/cleaned_data.csv")
+data <- read_csv(here("data", "cleaned_data.csv"))
 data <- data %>%
   select(year, Player, Age, GS, Wins, Completions, Attempts, Comp_Percentage)
 
@@ -21,12 +19,11 @@ head(data, 10)
 
 ```{r}
 #2015–2024 
-historical_qbs <- qb_data_clean %>%
+historical_qbs <- data %>%
   filter(year >= 2015, year <= 2024)
 
-
 #2025 
-qbs_2025 <- qb_data_clean %>%
+qbs_2025 <- data %>%
   filter(year == 2025)
 
 historical_qbs <- historical_qbs %>%
@@ -34,7 +31,6 @@ historical_qbs <- historical_qbs %>%
 ```
 
 ```{r}
-
 ggplot(historical_qbs, aes(x = comp_rate)) +
   geom_histogram(bins = 21, fill = "steelblue", color = "white") +
   labs(
@@ -78,7 +74,7 @@ historical_qbs %>%
 ```
 
 ```{r}
-qb_data_clean %>%
+data %>%
   ggplot(aes(x = Age)) +
   geom_histogram(bins = 15, fill = "skyblue", color = "white") +
   labs(
@@ -90,7 +86,7 @@ qb_data_clean %>%
 ```
 
 ```{r}
-qb_data_clean %>%
+data %>%
   mutate(comp_rate = Completions / Attempts) %>%
   ggplot(aes(x = Age, y = comp_rate)) +
   geom_point(alpha = 0.5) +
@@ -106,16 +102,6 @@ qb_data_clean %>%
 ## Posterior
 
 ```{r}
-
-#2015–2024 to build the prior
-historical_qbs <- qb_data_clean %>%
-  filter(year >= 2015, year <= 2024)
-
-#2025 for the posterior analysis
-qbs_2025 <- qb_data_clean %>%
-  filter(year == 2025)
-
-
 m <- mean(historical_qbs$comp_rate)
 v <- var(historical_qbs$comp_rate)
 
@@ -128,7 +114,7 @@ beta_prior  <- (1 - m) * ((m * (1 - m) / v) - 1)
 alpha_prior
 beta_prior
 
-qb_posteriors <- qb_data_clean %>%
+qb_posteriors <- data %>%
   mutate(
     alpha_post = alpha_prior + Completions,
     beta_post  = beta_prior + (Attempts - Completions)

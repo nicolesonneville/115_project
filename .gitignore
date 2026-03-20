@@ -4,6 +4,5 @@
 .Ruserdata
 .DS_Store
 
-# ignore quarto rendering files
-*_files/
 *.html
+*_files/

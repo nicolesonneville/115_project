@@ -3,6 +3,7 @@
 ```{r}
 #| message: false
 library(tidyverse)
+library(here)
 library(rstanarm)
 library(bayesplot)
 library(broom.mixed)
@@ -10,7 +11,7 @@ library(loo)
 ```
 
 ```{r}
-data <- read_csv("data/cleaned_data.csv")
+data <- read_csv(here("data", "cleaned_data.csv"))
 
 # Should I model without 2025?
 ```

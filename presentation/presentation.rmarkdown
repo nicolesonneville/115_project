@@ -11,6 +11,7 @@ format: revealjs
 ---
 
 ```{r}
+library(here)
 library(tidyverse)
 library(rstanarm)
 library(bayesplot)
@@ -71,7 +72,7 @@ How can we use historical data to model a QB's "true" accuracy while accounting 
 
 ```{r}
 #| message: false
-cleaned_data <- read_csv("data/cleaned_data.csv")
+cleaned_data <- read_csv(here("data", "cleaned_data.csv"))
 qb_data_clean <- cleaned_data %>%
   select(year, Player, Age, GS, Wins, Completions, Attempts, Comp_Percentage) %>%
   rename(Games = GS)
@@ -361,3 +362,4 @@ Statistical Model
     -   Our per season modeling provides insights of general NFL trends and how overall quarterback play has changed.
 
     -   Our per player modeling gives NFL teams a better understanding of a player’s true completion ability, which is valuable when comparing QBs. 
+

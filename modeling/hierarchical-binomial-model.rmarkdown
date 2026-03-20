@@ -1,0 +1,259 @@
+### Binomial Hierarchical Modeling
+Final pipeline
+
+```{r}
+library(here)
+library(tidyverse)
+library(rstanarm)
+
+cleaned_data <- read_csv(here("data", "cleaned_data.csv"))
+glimpse(data)
+```
+
+```{r}
+cleaned_data <- cleaned_data %>%
+  mutate(
+    Missed = Attempts - Completions
+  ) %>%
+  select(Player, year, Completions, Missed, Attempts)
+```
+
+```{r}
+historical <- cleaned_data %>%
+  filter(year < 2025)
+
+data_2025 <- cleaned_data %>%
+  filter(year == 2025)
+```
+
+```{r}
+hist_model <- stan_glmer(
+  cbind(Completions, Missed) ~ 1 + (1 | Player) + (1 | year),
+  data = historical,
+  family = binomial(link = "logit"),
+  chains = 4,
+  iter = 5000*2,
+  seed = 123,
+  refresh = FALSE
+)
+```
+
+```{r}
+posterior <- as.data.frame(hist_model)
+mu_median <- median(posterior$`(Intercept)`)
+mu_sd   <- sd(posterior$`(Intercept)`)
+```
+
+```{r}
+model_2025 <- stan_glmer(
+  cbind(Completions, Missed) ~ 1 + (1 | Player),
+  data = data_2025,
+  family = binomial(link = "logit"),
+  prior_intercept = normal(location = mu_median, scale =  mu_sd),
+  prior_aux = exponential(1),
+  chains = 4,
+  iter = 5000*2,
+  seed = 123, 
+  refresh = FALSE
+)
+```
+
+```{r}
+library(bayesplot)
+
+posterior_array <- as.array(model_2025)
+```
+
+```{r}
+mcmc_trace(posterior_array, 
+           pars = c("(Intercept)", "Sigma[Player:(Intercept),(Intercept)]"))
+```
+
+```{r}
+mcmc_acf(posterior_array, 
+         pars = c("(Intercept)", "Sigma[Player:(Intercept),(Intercept)]"))
+```
+
+```{r}
+mcmc_dens_overlay(posterior_array, 
+           pars = c("(Intercept)", "Sigma[Player:(Intercept),(Intercept)]"))
+```
+
+```{r}
+library(bayesplot)
+pp_check(model_2025, nreps = 100)
+```
+
+```{r}
+post_preds <- posterior_epred(model_2025)
+
+mu_preds <- colMeans(post_preds)
+
+actual_rates <- data_2025$Completions / (data_2025$Completions + data_2025$Missed)
+
+mae_2025 <- mean(abs(mu_preds - actual_rates))
+mae_2025
+```
+
+```{r}
+y_actual <- data_2025$Completions
+y_rep <- posterior_predict(model_2025)
+
+ppc_dens_overlay(y_actual, y_rep[1:100, ]) +
+  labs(title = "Posterior Predictive Check",
+       subtitle = "Actual completions vs. 100 simulated versions")
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidybayes)
+library(scales)
+
+# top 20 players
+top_20_players <- data_2025 %>%
+  group_by(Player) %>%
+  slice(1) %>%
+  add_epred_draws(model_2025) %>%
+  median_qi(.epred) %>%
+  ungroup() %>%
+  slice_max(order_by = .epred, n = 20) %>%
+  pull(Player)
+
+# filter to just those players
+data_top_20 <- data_2025 %>%
+  filter(Player %in% top_20_players) %>%
+  group_by(Player) %>%
+  slice(1)
+
+# posterior draws
+player_previews_20 <- data_top_20 %>%
+  add_epred_draws(model_2025)
+
+ggplot(player_previews_20, aes(x = .epred, y = reorder(Player, .epred))) +
+  # 95% and 80% credible intervals
+  stat_pointinterval(.width = c(.80, .95), color = "steelblue") +
+  # convert to %
+  scale_x_continuous(
+    labels = percent_format(accuracy = 1),
+    breaks = seq(0, 1, by = 0.02)
+  ) +
+  labs(
+    title = "Top 20 Quarterbacks: Predicted 2025 Completion Rates",
+    subtitle = "95% and 80% Credible Intervals",
+    x = "Expected Completion Percentage",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_text(face = "bold")
+  )
+```
+
+### Checking if random intercepts are needed
+
+```{r}
+# Full Model (What you have now)
+fit_both <- stan_glmer(cbind(Completions, Missed) ~ 1 + (1 | Player) + (1 | year), 
+                       data = historical, family = binomial, refresh = FALSE)
+
+# Model without Year
+fit_player_only <- stan_glmer(cbind(Completions, Missed) ~ 1 + (1 | Player), 
+                              data = historical, family = binomial, refresh = FALSE)
+
+# Model without Player (just to be thorough)
+fit_year_only <- stan_glmer(cbind(Completions, Missed) ~ 1 + (1 | year), 
+                            data = historical, family = binomial, refresh = FALSE)
+
+```
+
+```{r}
+# 1. Run kfold for both models
+kfold_full <- kfold(fit_both, K = 10)
+kfold_player_only <- kfold(fit_player_only, K = 10)
+
+# 2. Compare
+loo_compare(kfold_full, kfold_player_only)
+```
+
+```{r}
+library(ggplot2)
+library(broom.mixed)
+
+year_intercepts <- tidy(fit_both, effects = "ran_vals") %>% 
+  filter(group == "year")
+
+ggplot(year_intercepts, aes(x = level, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Relative Difficulty by Year (Log-Odds)",
+       x = "Year", y = "Adjustment to Completion Rate") +
+  theme_minimal()
+```
+
+```{r}
+kfold_year_only <- kfold(fit_year_only, K = 10)
+loo_compare(kfold_full, kfold_year_only)
+```
+
+```{r}
+player_intercepts <- tidy(fit_both, effects = "ran_vals") %>% 
+  filter(group == "Player")
+
+ggplot(player_intercepts, aes(x = reorder(level, estimate), y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Relative Difficulty by Player (Log-Odds)",
+       x = "Player", 
+       y = "Adjustment to Completion Rate") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) # Rotates names 45 degrees
+```
+
+```{r}
+historical$year_idx <- historical$year - min(historical$year)
+
+fit_intercept <- stan_glmer(
+  cbind(Completions, Missed) ~ year_idx + (1 | Player) + (1 | year),
+  data = historical,
+  family = binomial(link = "logit"),
+  cores = 2, seed = 123, refresh = FALSE
+)
+
+fit_slope <- stan_glmer(
+  cbind(Completions, Missed) ~ year_idx + (1 + year_idx | Player) + (1 | year),
+  data = historical,
+  family = binomial(link = "logit"),
+  cores = 2, seed = 123, refresh = FALSE
+)
+
+k_intercept <- kfold(fit_intercept, K = 10)
+k_slope     <- kfold(fit_slope, K = 10)
+
+comparison <- loo_compare(k_intercept, k_slope)
+print(comparison)
+```
+
+```{r}
+library(broom.mixed)
+# Extract the slope estimates for each player
+player_slopes <- tidy(fit_slope, effects = "ran_vals") %>% 
+  filter(term == "year_idx")
+
+ggplot(player_slopes, aes(x = reorder(level, estimate), y = estimate)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  coord_flip() +
+  labs(title = "Who is Improving vs. Declining?",
+       subtitle = "Positive = Improving completion rate over time",
+       x = "Player", y = "Slope (Rate of Change)") +
+  theme_minimal()
+```
+
+```{r}
+print(fit_slope, pars = "sigma")
+```
+

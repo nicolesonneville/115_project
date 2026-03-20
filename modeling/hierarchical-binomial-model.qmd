@@ -1,16 +1,12 @@
----
-title: "nicole_hierarchial"
-format: pdf
-editor: visual
----
-
-### Final pipeline
+### Binomial Hierarchical Modeling
+Final pipeline
 
 ```{r}
+library(here)
 library(tidyverse)
 library(rstanarm)
 
-cleaned_data <- read_csv("data/cleaned_data.csv")
+cleaned_data <- read_csv(here("data", "cleaned_data.csv"))
 glimpse(data)
 ```
 
