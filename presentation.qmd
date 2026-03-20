@@ -278,40 +278,52 @@ Each year gets a random adjustment in **log-odds** relative to the global mean. 
 ## Player Random Effects
 
 ```{r}
-player_intercepts <- tidy(fit_both, effects = "ran_vals") %>% 
-  filter(group == "Player")
+library(dplyr)
+library(ggplot2)
+library(tidybayes)
+library(scales)
 
-ggplot(player_intercepts, aes(x = reorder(level, estimate), y = estimate)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(title = "Relative Difficulty by Player (Log-Odds)",
-       x = "Player", 
-       y = "Adjustment to Completion Rate") +
+# top 20 players
+top_20_players <- data_2025 %>%
+  group_by(Player) %>%
+  slice(1) %>%
+  add_epred_draws(model_2025) %>%
+  median_qi(.epred) %>%
+  ungroup() %>%
+  slice_max(order_by = .epred, n = 20) %>%
+  pull(Player)
+
+# filter to just those players
+data_top_20 <- data_2025 %>%
+  filter(Player %in% top_20_players) %>%
+  group_by(Player) %>%
+  slice(1)
+
+# posterior draws
+player_previews_20 <- data_top_20 %>%
+  add_epred_draws(model_2025)
+
+ggplot(player_previews_20, aes(x = .epred, y = reorder(Player, .epred))) +
+  # 95% and 80% credible intervals
+  stat_pointinterval(.width = c(.80, .95), color = "steelblue") +
+  # convert to %
+  scale_x_continuous(
+    labels = percent_format(accuracy = 1),
+    breaks = seq(0, 1, by = 0.02)
+  ) +
+  labs(
+    title = "Top 20 Quarterbacks: Predicted 2025 Completion Rates",
+    subtitle = "95% and 80% Credible Intervals",
+    x = "Expected Completion Percentage",
+    y = NULL
+  ) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) # Rotates names 45 degrees
+  theme(
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_text(face = "bold")
+  )
 ```
-QBs with **fewer seasons are pulled more strongly** toward the mean (regularization). Positive = above-average accuracy; negative = below. More informative than raw % — accounts for sample size and year effects.
-
-##
-
-```{r}
-historical$year_idx <- historical$year - min(historical$year)
-
-fit_intercept <- stan_glmer(
-  cbind(Completions, Missed) ~ year_idx + (1 | Player) + (1 | year),
-  data = historical,
-  family = binomial(link = "logit"),
-  cores = 2, seed = 123, refresh = FALSE
-)
-
-fit_slope <- stan_glmer(
-  cbind(Completions, Missed) ~ year_idx + (1 + year_idx | Player) + (1 | year),
-  data = historical,
-  family = binomial(link = "logit"),
-  cores = 2, seed = 123, refresh = FALSE
-)
-```
+This plot displays the modeled completion rates and credible intervals for the top 20 QBs. Through partial pooling, the model applies shrinkage, pulling high variance estimates from small sample sizes towards the league average.
 
 ## Top 10 Players from the 2025 Data vs Our Model
 
