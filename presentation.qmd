@@ -26,46 +26,44 @@ How can we estimate and compare the **true completion ability** of NFL quarterba
 
 **Passing** is almost synonymous with **winning** in the NFL.
 
-- **Pass**: A throw from one player to another.
-- **Completion**: A pass successfully caught by the receiver.
+-   **Pass**: A throw from one player to another.
+-   **Completion**: A pass successfully caught by the receiver.
 
 Quarterbacks **(QB)** are integral to a good passing team.
 
-- They are the ones who always throw the ball!
-- Comparison of NFL quarterbacks is a highly debated topic.
+-   They are the ones who always throw the ball!
+-   Comparison of NFL quarterbacks is a highly debated topic.
 
 ## Why Raw Completion Percentage Is Not Enough:
 
-- Completion percentage is often a gauge of QB accuracy.
-$$\scriptsize \text{Completion %} = \frac{\text{Number of Completions}}{\text{Number of Pass Attempts}}$$
-- Direct comparison of QB completion rates is difficult since each QB faces unique scenarios and challenges.
-  - (ex: some QBs have better teams than others)
+-   Completion percentage is often a gauge of QB accuracy. $$\scriptsize \text{Completion %} = \frac{\text{Number of Completions}}{\text{Number of Pass Attempts}}$$
+-   Direct comparison of QB completion rates is difficult since each QB faces unique scenarios and challenges.
+    -   (ex: some QBs have better teams than others)
 
 How can we use historical data to model a quarterback's "true" accuracy while accounting for situational variance?
 
-
 ## Data Selection
 
-- Season-long QB data
-  - Official NFL data from 11 seasons (2015-2025)
-  - [https://www.pro-football-reference.com](https://www.pro-football-reference.com)
-  - Contains many different passing related statistics
+-   Season-long QB data
+    -   Official NFL data from 11 seasons (2015-2025)
+    -   <https://www.pro-football-reference.com>
+    -   Contains many different passing related statistics
 
 ## Data Cleaning
 
-- Our clean data includes NFL players who:
-  - are QBs (main throwers of the ball in American football).
-  - have started more than 3 games.
-  - have more than 50 pass attempts.
-- We removed rows where players appeared multiple times in one year due to team switches.
+-   Our clean data includes NFL players who:
+    -   are QBs (main throwers of the ball in American football).
+    -   have started more than 3 games.
+    -   have more than 50 pass attempts.
+-   We removed rows where players appeared multiple times in one year due to team switches.
 
 ## Dataset
 
-- 452 rows, 15 columns, and 121 unique QBs with varying occurrences over the decade of data.
-- Main variables: `Completions`, `Attempts`, `Comp_Percentage`
-  - `Completions`: Number of passes completed in a season.
-  - `Attempts`: Number of passes attempted in a season.
-  - `Comp_Percentage`: Accuracy metric calculated by $\frac{\text{Number of Completions}}{\text{Number of Pass Attempts}}$.
+-   452 rows, 15 columns, and 121 unique QBs with varying occurrences over the decade of data.
+-   Main variables: `Completions`, `Attempts`, `Comp_Percentage`
+    -   `Completions`: Number of passes completed in a season.
+    -   `Attempts`: Number of passes attempted in a season.
+    -   `Comp_Percentage`: Accuracy metric calculated by $\frac{\text{Number of Completions}}{\text{Number of Pass Attempts}}$.
 
 ## Dataset Preview
 
@@ -103,7 +101,7 @@ ggplot(historical, aes(x = Comp_Percentage / 100)) +
   theme_minimal()
 ```
 
-Most QBs cluster between **58–70%**, with the distribution roughly bell-shaped around ~64% and few outliers.
+Most QBs cluster between **58–70%**, with the distribution roughly bell-shaped around \~64% and few outliers.
 
 ## Exploratory Data Analysis
 
@@ -158,8 +156,7 @@ QB seasons are correlated — the same player appears across multiple years. A h
 
 We used **2015–2024** to build an empirical prior, then apply it to **2025** data. This lets us anchor our 2025 estimates to a decade of historical performance.
 
-
-##
+## 
 
 We fit a Binomial hierarchical model with random intercepts for player and year using the historical data (2015-2024) and pulled the median and SD to use as our prior.
 
@@ -182,7 +179,7 @@ mu_median <- median(posterior$`(Intercept)`)
 mu_sd   <- sd(posterior$`(Intercept)`)
 ```
 
-##
+## 
 
 Fit the same model on 2025 data only, plugging in `mu_median` and `mu_sd` from Step 1.
 
@@ -211,6 +208,7 @@ posterior_array <- as.array(model_2025)
 mcmc_trace(posterior_array, 
            pars = c("(Intercept)", "Sigma[Player:(Intercept),(Intercept)]"))
 ```
+
 Chains are mixing well.
 
 ## MCMC Autocorrelation Plot
@@ -219,6 +217,7 @@ Chains are mixing well.
 mcmc_acf(posterior_array, 
          pars = c("(Intercept)", "Sigma[Player:(Intercept),(Intercept)]"))
 ```
+
 Autocorrelation drops quickly to near zero.
 
 ## MCMC Posterior Densities
@@ -227,6 +226,7 @@ Autocorrelation drops quickly to near zero.
 mcmc_dens_overlay(posterior_array, 
            pars = c("(Intercept)", "Sigma[Player:(Intercept),(Intercept)]"))
 ```
+
 All four chains have nearly identical density curves, confirming convergence to the same posterior.
 
 ## Predictive Posterior Check
@@ -239,9 +239,10 @@ ppc_dens_overlay(y_actual, y_rep[1:100, ]) +
   labs(title = "Posterior Predictive Check",
        subtitle = "Actual completions vs. 100 simulated versions")
 ```
+
 Simulated distributions closely follow the observed distribution.
 
-##
+## 
 
 ```{r}
 post_preds <- posterior_epred(model_2025)
@@ -251,6 +252,7 @@ actual_rates <- data_2025$Completions / (data_2025$Completions + data_2025$Misse
 mae_2025 <- mean(abs(mu_preds - actual_rates))
 cat("Mean Absolute Error (2025):", round(mae_2025, 4))
 ```
+
 MAE measures the average absolute difference between the **posterior mean predicted completion rate** and the **observed rate** across all 2025 QBs.
 
 ## Year Random Effects
@@ -273,6 +275,7 @@ ggplot(year_intercepts, aes(x = level, y = estimate)) +
        x = "Year", y = "Adjustment to Completion Rate") +
   theme_minimal()
 ```
+
 Each year gets a random adjustment in **log-odds** relative to the global mean. Positive = easier year for completions league-wide. Captures rule changes, weather trends, or strategic shifts affecting all QBs equally.
 
 ## Player Random Effects
@@ -318,16 +321,62 @@ ggplot(player_previews_20, aes(x = .epred, y = reorder(Player, .epred))) +
     y = NULL
   ) +
   theme_minimal() +
+<<<<<<< HEAD
   theme(
     panel.grid.minor = element_blank(),
     axis.text.y = element_text(face = "bold")
   )
+=======
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) # Rotates names 45 degrees
+```
+
+QBs with **fewer seasons are pulled more strongly** toward the mean (regularization). Positive = above-average accuracy; negative = below. More informative than raw % — accounts for sample size and year effects.
+
+## 
+
+```{r}
+historical$year_idx <- historical$year - min(historical$year)
+
+fit_intercept <- stan_glmer(
+  cbind(Completions, Missed) ~ year_idx + (1 | Player) + (1 | year),
+  data = historical,
+  family = binomial(link = "logit"),
+  cores = 2, seed = 123, refresh = FALSE
+)
+
+fit_slope <- stan_glmer(
+  cbind(Completions, Missed) ~ year_idx + (1 + year_idx | Player) + (1 | year),
+  data = historical,
+  family = binomial(link = "logit"),
+  cores = 2, seed = 123, refresh = FALSE
+)
+```
+
+Players with **positive slopes** are improving their completion rate over time; **negative slopes** indicate decline. This is only possible because the random-slope model won the model comparison.
+
+## 
+
+```{r}
+# Extract the slope estimates for each player
+player_slopes <- tidy(fit_slope, effects = "ran_vals") %>% 
+  filter(term == "year_idx")
+
+ggplot(player_slopes, aes(x = reorder(level, estimate), y = estimate)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  coord_flip() +
+  labs(title = "Who is Improving vs. Declining?",
+       subtitle = "Positive = Improving completion rate over time",
+       x = "Player", y = "Slope (Rate of Change)") +
+  theme_minimal()
+>>>>>>> 22ab01c (Update limitations)
 ```
 This plot displays the modeled completion rates and credible intervals for the top 20 QBs. Through partial pooling, the model applies shrinkage, pulling high variance estimates from small sample sizes towards the league average.
 
 ## Top 10 Players from the 2025 Data vs Our Model
 
 We extract each QB's **posterior median completion probability** by using `posterior_epred()` to get full posterior draws, then computing the median and 95% credible interval per player.
+
 ```{r}
 # 1. Extract posterior draws (rows = draws, cols = observations)
 re_draws <- posterior_epred(model_2025, re.form = NULL)
@@ -372,3 +421,74 @@ raw_tbl
 model_tbl
 ```
 
+## Current Limitations 
+
+Random Effects
+
+-   Limited repeated data for many individual Quarterbacks
+
+    -   1-2 seasons only
+
+    -   Few attempts
+
+    -   High uncertainty in player effects
+
+    -   Shrinkage toward the mean
+
+Aggregated Data
+
+-   Game situations (red zone)
+
+-   Within-season variability
+
+-   Missing Context
+
+    -   Defensive strength
+
+    -   Receiver separation (distance)
+
+    -   Weather conditions
+
+    -   Past/Current Injuries
+
+Reflect more than just QB skill
+
+Statistical Model
+
+-   Does not capture:
+
+    -   Player Improvement
+
+    -   Age overtime
+
+## With Unlimited time and Resources
+
+More Data
+
+-   Play by play
+
+    -   Throw Difficulty
+
+    -   Defensive Pressure
+
+    -   Game Context
+
+Stronger Hierarchical Model
+
+-   Add team, opponent, and situation effects
+
+-   Time-varying component to model careers
+
+Better Player Estimates
+
+-   More observation per QB for stronger random effects
+
+-   Separate the true QB accuracy and external influences
+
+## Future Impacts 
+
+-   Our analysis provides valuable insights into NFL passing trends and a new framework for evaluating quarterback accuracy
+
+    -   Our per season modeling provides insights of general NFL trends and how overall quarterback play has changed
+
+    -   Our per player modeling gives NFL teams a better understanding of a player’s true completion ability, which is valuable when deciding
