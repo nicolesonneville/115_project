@@ -321,13 +321,10 @@ ggplot(player_previews_20, aes(x = .epred, y = reorder(Player, .epred))) +
     y = NULL
   ) +
   theme_minimal() +
-<<<<<<< HEAD
   theme(
     panel.grid.minor = element_blank(),
     axis.text.y = element_text(face = "bold")
   )
-=======
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) # Rotates names 45 degrees
 ```
 
 QBs with **fewer seasons are pulled more strongly** toward the mean (regularization). Positive = above-average accuracy; negative = below. More informative than raw % — accounts for sample size and year effects.
@@ -369,7 +366,6 @@ ggplot(player_slopes, aes(x = reorder(level, estimate), y = estimate)) +
        subtitle = "Positive = Improving completion rate over time",
        x = "Player", y = "Slope (Rate of Change)") +
   theme_minimal()
->>>>>>> 22ab01c (Update limitations)
 ```
 This plot displays the modeled completion rates and credible intervals for the top 20 QBs. Through partial pooling, the model applies shrinkage, pulling high variance estimates from small sample sizes towards the league average.
 
