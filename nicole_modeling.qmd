@@ -19,7 +19,7 @@ cleaned_data <- cleaned_data %>%
   mutate(
     Missed = Attempts - Completions
   ) %>%
-  select(Player, year, Completions, Missed, Attempts, year)
+  select(Player, year, Completions, Missed, Attempts)
 ```
 
 ```{r}
@@ -106,6 +106,53 @@ y_rep <- posterior_predict(model_2025)
 ppc_dens_overlay(y_actual, y_rep[1:100, ]) +
   labs(title = "Posterior Predictive Check",
        subtitle = "Actual completions vs. 100 simulated versions")
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidybayes)
+library(scales)
+
+# top 20 players
+top_20_players <- data_2025 %>%
+  group_by(Player) %>%
+  slice(1) %>%
+  add_epred_draws(model_2025) %>%
+  median_qi(.epred) %>%
+  ungroup() %>%
+  slice_max(order_by = .epred, n = 20) %>%
+  pull(Player)
+
+# filter to just those players
+data_top_20 <- data_2025 %>%
+  filter(Player %in% top_20_players) %>%
+  group_by(Player) %>%
+  slice(1)
+
+# posterior draws
+player_previews_20 <- data_top_20 %>%
+  add_epred_draws(model_2025)
+
+ggplot(player_previews_20, aes(x = .epred, y = reorder(Player, .epred))) +
+  # 95% and 80% credible intervals
+  stat_pointinterval(.width = c(.80, .95), color = "steelblue") +
+  # convert to %
+  scale_x_continuous(
+    labels = percent_format(accuracy = 1),
+    breaks = seq(0, 1, by = 0.02)
+  ) +
+  labs(
+    title = "Top 20 Quarterbacks: Predicted 2025 Completion Rates",
+    subtitle = "95% and 80% Credible Intervals",
+    x = "Expected Completion Percentage",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_text(face = "bold")
+  )
 ```
 
 ### Checking if random intercepts are needed
