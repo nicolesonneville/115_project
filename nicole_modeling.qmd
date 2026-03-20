@@ -203,6 +203,9 @@ loo_compare(kfold_full, kfold_year_only)
 ```
 
 ```{r}
+player_intercepts <- tidy(fit_both, effects = "ran_vals") %>% 
+  filter(group == "Player")
+
 ggplot(player_intercepts, aes(x = reorder(level, estimate), y = estimate)) +
   geom_point() +
   geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
